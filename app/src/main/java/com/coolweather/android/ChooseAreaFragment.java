@@ -1,6 +1,7 @@
 package com.coolweather.android;
 
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,10 +12,6 @@ import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.fragment.app.Fragment;
 
 import com.coolweather.android.db.City;
 import com.coolweather.android.db.County;
@@ -28,16 +25,25 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Response;
 
 public class ChooseAreaFragment extends Fragment {
 
+    /**
+     * 宏定义试图的不同级别
+     */
     public static final int LEVEL_PROVINCE = 0;
     public static final int LEVEL_CITY = 1;
     public static final int LEVEL_COUNTY = 2;
 
+    /**
+     * 准备一些控件
+     */
     private ProgressDialog progressDialog;
     private TextView titleText;
     private Button backButton;
@@ -78,8 +84,8 @@ public class ChooseAreaFragment extends Fragment {
         View view = inflater.inflate(R.layout.choose_area, container, false);
         titleText = view.findViewById(R.id.title_text);
         backButton = view.findViewById(R.id.back_button);
-        listView = view.findViewById(R.id.list_view);
-        adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_1, dataList);
+        listView = view.findViewById(R.id.list_view);   //获取控件的实例
+        adapter = new ArrayAdapter<>(getContext(), android.R.layout.simple_list_item_1, dataList);  //初始化 ArrayAdapter
         listView.setAdapter(adapter);
         return view;
     }
@@ -87,6 +93,8 @@ public class ChooseAreaFragment extends Fragment {
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+
+        // 设置 ListView 和 Button 的点击事件
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -96,6 +104,12 @@ public class ChooseAreaFragment extends Fragment {
                 } else if (currentLevel == LEVEL_CITY) {
                     selectedCity = cityList.get(position);
                     queryCounties();
+                }else if(currentLevel==LEVEL_COUNTY){
+                    String weatherId = countyList.get(position).getWeatherId();
+                    Intent intent = new Intent(getActivity(), WeatherActivity.class);
+                    intent.putExtra("weather_id",weatherId);    // 向intent传入WeatherId
+                    startActivity(intent);
+                    getActivity().finish();
                 }
             }
         });
@@ -109,17 +123,17 @@ public class ChooseAreaFragment extends Fragment {
                 }
             }
         });
-        queryProvinces();
+        queryProvinces();   // 加载省级数据
     }
 
     /**
      * 查询全国所有的省，优先从数据库中查询，如果没有查询到再到服务器上查询
      */
     private void queryProvinces() {
-        titleText.setText("中国");
-        backButton.setVisibility(View.GONE);
-        provinceList = DataSupport.findAll(Province.class);
-        if (provinceList.size() > 0) {
+        titleText.setText("中国");    // 设置头布局标题
+        backButton.setVisibility(View.GONE);    // 隐藏返回按钮
+        provinceList = DataSupport.findAll(Province.class); // 调用 LitePal 查询接口来从数据库中读取省级数据
+        if (provinceList.size() > 0) {  // 读到了则显示到界面上
             dataList.clear();
             for (Province province : provinceList) {
                 dataList.add(province.getProvinceName());
@@ -127,9 +141,9 @@ public class ChooseAreaFragment extends Fragment {
             adapter.notifyDataSetChanged();
             listView.setSelection(0);
             currentLevel = LEVEL_PROVINCE;
-        } else {
-            String address = "http://guolin.tech/api/china";
-            queryFromServer(address, "province");
+        } else {    // 没有读到则从服务器上获取
+            String address = "http://guolin.tech/api/china";    // 请求地址
+            queryFromServer(address, "province");   // 后面会定义此方法
         }
 
     }
@@ -186,9 +200,9 @@ public class ChooseAreaFragment extends Fragment {
      */
     private void queryFromServer(String address, final String type) {
         showProgressDialog();
-        HttpUtil.sendOkHttpRequest(address, new Callback() {
+        HttpUtil.sendOkHttpRequest(address, new Callback() {    // 向服务器发送请求
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(Call call, IOException e) {   //处理加载失败的情况
                 getActivity().runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -200,6 +214,7 @@ public class ChooseAreaFragment extends Fragment {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
+                // 接收响应的数据并做对应处理
                 String responseText = response.body().string();
                 boolean result = false;
                 if ("province".equals(type)) {
@@ -210,12 +225,12 @@ public class ChooseAreaFragment extends Fragment {
                     result = Utility.handleCountyResponse(responseText, selectedCity.getId());
                 }
                 if (result) {
-                    getActivity().runOnUiThread(new Runnable() {
+                    getActivity().runOnUiThread(new Runnable() {    // 从子线程切换到主线程
                         @Override
                         public void run() {
                             closeProgressDialog();
                             if ("province".equals(type)) {
-                                queryProvinces();
+                                queryProvinces();   // 重新加载数据
                             } else if ("city".equals(type)) {
                                 queryCities();
                             } else if ("county".equals(type)) {
